@@ -1,0 +1,5 @@
+raw/
+processed/
+*.csv
+*.zip
+*.parquet
