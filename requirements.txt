@@ -8,3 +8,4 @@ notebook
 flask
 joblib
 scipy
+uv
