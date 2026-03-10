@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Movie Profitability Predictor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+  <!-- ambient grain overlay -->
+  <div class="grain"></div>
+
+  <main class="container">
+    <!-- header -->
+    <header class="header">
+      <span class="header__tag">ECS 171 · Final Project</span>
+      <h1 class="header__title">Movie Profitability<br/>Predictor</h1>
+      <p class="header__sub">Gradient Boosting model trained on TMDB data &middot; ROI &ge; 2.5&times; threshold</p>
+    </header>
+
+    <!-- form card -->
+    <section class="card">
+      <div class="form-grid" id="inputForm">
+
+        <!-- Budget -->
+        <div class="field">
+          <label for="budget">Budget ($)</label>
+          <input type="number" id="budget" placeholder="e.g. 50000000" min="1" step="1" />
+        </div>
+
+        <!-- Runtime -->
+        <div class="field">
+          <label for="runtime">Runtime (min)</label>
+          <input type="number" id="runtime" placeholder="e.g. 120" min="1" step="1" />
+        </div>
+
+        <!-- Genre -->
+        <div class="field field--full">
+          <label for="genres">Genre</label>
+          <select id="genres">
+            <option value="Drama" selected>Drama</option>
+            <option value="Comedy">Comedy</option>
+            <option value="Drama, Romance">Drama, Romance</option>
+            <option value="Documentary">Documentary</option>
+            <option value="Comedy, Drama">Comedy, Drama</option>
+            <option value="Comedy, Romance">Comedy, Romance</option>
+            <option value="Horror">Horror</option>
+            <option value="Comedy, Drama, Romance">Comedy, Drama, Romance</option>
+            <option value="Horror, Thriller">Horror, Thriller</option>
+            <option value="Drama, Thriller">Drama, Thriller</option>
+            <option value="Action, Drama">Action, Drama</option>
+            <option value="Thriller">Thriller</option>
+            <option value="Action, Thriller">Action, Thriller</option>
+            <option value="Action">Action</option>
+            <option value="Music">Music</option>
+            <option value="Crime, Drama">Crime, Drama</option>
+            <option value="Action, Comedy">Action, Comedy</option>
+            <option value="Action, Crime, Thriller">Action, Crime, Thriller</option>
+          </select>
+        </div>
+
+        <!-- Production Company -->
+        <div class="field field--full">
+          <label for="production_companies">Production Company</label>
+          <select id="production_companies">
+            <option value="Other" selected>Other / Independent</option>
+            <option value="Metro-Goldwyn-Mayer">Metro-Goldwyn-Mayer</option>
+            <option value="Paramount">Paramount</option>
+            <option value="Warner Bros. Pictures">Warner Bros. Pictures</option>
+            <option value="20th Century Fox">20th Century Fox</option>
+            <option value="Columbia Pictures">Columbia Pictures</option>
+            <option value="Universal Pictures">Universal Pictures</option>
+            <option value="New Line Cinema">New Line Cinema</option>
+            <option value="Walt Disney Productions">Walt Disney Productions</option>
+            <option value="Marvel Studios">Marvel Studios</option>
+            <option value="Touchstone Pictures">Touchstone Pictures</option>
+            <option value="TriStar Pictures">TriStar Pictures</option>
+            <option value="Orion Pictures">Orion Pictures</option>
+            <option value="Walt Disney Pictures">Walt Disney Pictures</option>
+            <option value="United Artists">United Artists</option>
+          </select>
+        </div>
+
+        <!-- Production Country -->
+        <div class="field">
+          <label for="production_countries">Country</label>
+          <select id="production_countries">
+            <option value="United States of America" selected>United States</option>
+            <option value="India">India</option>
+            <option value="United Kingdom">United Kingdom</option>
+            <option value="United Kingdom, United States of America">UK &amp; US</option>
+            <option value="Brazil">Brazil</option>
+            <option value="France">France</option>
+            <option value="Russia">Russia</option>
+            <option value="China">China</option>
+            <option value="Canada, United States of America">Canada &amp; US</option>
+            <option value="Canada">Canada</option>
+            <option value="Spain">Spain</option>
+            <option value="Germany, United States of America">Germany &amp; US</option>
+            <option value="Japan">Japan</option>
+            <option value="Australia">Australia</option>
+            <option value="South Korea">South Korea</option>
+          </select>
+        </div>
+
+        <!-- Release Season -->
+        <div class="field">
+          <label for="release_season">Release Season</label>
+          <select id="release_season">
+            <option value="Summer">Summer (May–Jul)</option>
+            <option value="Holiday">Holiday (Nov–Dec)</option>
+            <option value="Other" selected>Other</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn" id="predictBtn" onclick="submitPrediction()">
+        <span class="btn__text">Predict Profitability</span>
+        <span class="btn__loader" id="btnLoader"></span>
+      </button>
+
+      <!-- error area -->
+      <div class="error-box" id="errorBox"></div>
+    </section>
+
+    <!-- result card (hidden until prediction) -->
+    <section class="result-card hidden" id="resultCard">
+      <p class="result-card__label" id="resultLabel"></p>
+      <p class="result-card__prob" id="resultProb"></p>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <p class="result-card__note">Probability that revenue / budget &ge; 2.5&times;</p>
+    </section>
+
+  </main>
+
+  <script>
+    async function submitPrediction() {
+      const btn   = document.getElementById('predictBtn');
+      const loader = document.getElementById('btnLoader');
+      const errBox = document.getElementById('errorBox');
+      const resultCard = document.getElementById('resultCard');
+
+      // reset
+      errBox.textContent = '';
+      errBox.classList.remove('visible');
+      resultCard.classList.add('hidden');
+      btn.classList.add('loading');
+
+      const payload = {
+        budget:                document.getElementById('budget').value,
+        runtime:               document.getElementById('runtime').value,
+        genres:                document.getElementById('genres').value,
+        production_companies:  document.getElementById('production_companies').value,
+        production_countries:  document.getElementById('production_countries').value,
+        release_season:        document.getElementById('release_season').value,
+      };
+
+      try {
+        const res  = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          errBox.innerHTML = data.errors.join('<br/>');
+          errBox.classList.add('visible');
+          btn.classList.remove('loading');
+          return;
+        }
+
+        // show result
+        const prob  = data.probability;
+        const label = data.label;
+        const profitable = prob >= 50;
+
+        document.getElementById('resultLabel').textContent = label;
+        document.getElementById('resultProb').textContent  = prob + '%';
+
+        const card = document.getElementById('resultCard');
+        card.classList.remove('hidden', 'profitable', 'risky');
+        card.classList.add(profitable ? 'profitable' : 'risky');
+
+        const fill = document.getElementById('progressFill');
+        fill.style.width = '0%';
+        fill.classList.remove('profitable', 'risky');
+        fill.classList.add(profitable ? 'profitable' : 'risky');
+
+        // animate bar
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fill.style.width = prob + '%';
+          });
+        });
+
+      } catch (e) {
+        errBox.textContent = 'Network error – is the Flask server running?';
+        errBox.classList.add('visible');
+      }
+
+      btn.classList.remove('loading');
+    }
+  </script>
+</body>
+</html>
